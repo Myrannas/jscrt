@@ -1,0 +1,262 @@
+/* Mini Calculator */
+/* calc.y */
+
+%{
+int yyerror(char *s);
+int yylex(void);
+#include "js.h"
+#include "jsast.h"
+#include "../../src/javascript/parser.h"
+#include "../../src/javascript/jsast.h"
+
+using namespace ast;
+ast::Program *root;
+%}
+
+%union{
+  int		int_val;
+  float     float_val;
+  string*	str_val;
+  ast::ASTNode* node_val;
+  ast::Statement* statement;
+  ast::StatementList* statements;
+  ast::Expression* expression;
+  ast::Variable* variable;
+}
+
+%start	program
+
+%token  <id_val>    IDENTIFIER
+%token	<int_val>	INT_LITERAL
+%token	<float_val>	FLOAT_LITERAL
+%token	<op_val>	STR_LITERAL
+
+%type<statement> statement
+%type<statement> variables_or_expression
+%type<statement> variables
+%type<statement> compound_statement
+%type<variable> variable
+%type<statements> statements;
+%type<expression> expression;
+%type<expression> expression_opt;
+%type<expression> member_expression;
+%type<expression> assignment_expression;
+%type<expression> conditional_expression;
+%type<expression> or_expression;
+%type<expression> and_expression;
+%type<expression> bitwise_or_expression;
+%type<expression> bitwise_xor_expression;
+%type<expression> bitwise_and_expression;
+%type<expression> equality_expression;
+%type<expression> relational_expression;
+%type<expression> shift_expression;
+%type<expression> additive_expression;
+%type<expression> multiplicative_expression;
+%type<expression> unary_expression;
+%type<expression> primary_expression;
+%type<expression> constructor;
+%type<expression> condition;
+//Keywords
+%token FUNCTION
+%token IF
+%token ELSE
+%token WHILE
+%token FOR
+%token BREAK
+%token CONTINUE
+%token WITH
+%token VAR
+%token NEW
+%token DELETE
+%token THIS
+%token TRUE
+%token FALSE
+%token _NULL
+%token IN
+%token RETURN
+
+//Symbols
+%token COMMA
+%token SEMI
+%token LBRACE
+%token RBRACE
+%token LPAREN
+%token RPAREN
+%token EQUALS
+%token ASSIGN
+%token QMARK
+%token COLON
+%token LOGICAL_OR
+%token LOGICAL_AND
+%token BITWISE_OR
+%token BITWISE_XOR
+%token BITWISE_AND
+%token DOT
+%token LBRACKET
+%token RBRACKET
+%token MUL
+%token DIV
+%token PLUS
+%token MINUS
+%token LT
+%token LTE
+%token GT
+%token GTE
+%token STRICT_EQUALS
+%token SLEFT
+%token SRIGHT
+%token INC
+%token DEC
+
+%left	PLUS
+%left	MULT
+
+%%
+
+program: statements {root = new ast::Program($1);}
+
+function_definition: FUNCTION IDENTIFIER LPAREN parameter_list_opt RPAREN compound_statement
+
+parameter_list_opt: | parameter_list
+
+parameter_list: IDENTIFIER
+               | IDENTIFIER COMMA IDENTIFIER
+
+compound_statement: LBRACE statements RBRACE { $$ = new ast::BlockStatement($2); };
+
+statements: {$$ = new ast::StatementList();}
+    | statement statements {$$ = $2; $2->add($1); }
+
+statement: SEMI {$$ = new ast::EmptyStatement();}
+    | IF condition statement { $$ = new ast::IfStatement($2, $3); }
+    | IF condition statement ELSE statement { $$ = new ast::IfStatement($2, $3, $5); }
+    | WHILE condition statement { $$ = new ast::WhileStatement($2, $3)};
+//    | for_paren SEMI expression_opt SEMI expression_opt RPAREN statement
+//    | for_begin SEMI expression_opt SEMI expression_opt RPAREN statement
+//    | for_begin IN expression RPAREN statement
+    | BREAK SEMI { $$ = new ast::BreakStatement(); }
+    | CONTINUE SEMI {$$ = new ast::ContinueStatement();}
+    | WITH LPAREN expression RPAREN statement { $$ = new ast::WithStatement($3, $5); }
+    | RETURN expression_opt SEMI {$$ = new ast::ReturnStatement($2); }
+    | compound_statement { $$ = $1; };
+    | variables_or_expression SEMI {$$ = $1; }
+
+condition: LPAREN expression RPAREN { $$  = $2; }
+
+for_paren: FOR LPAREN
+
+for_begin: for_paren variables_or_expression
+
+variables_or_expression: VAR variables { $$ = $2; }
+    | expression { $$ = $1; }
+
+variables: variable {$$ = new ast::VariableList($1);}
+    | variable COMMA variables {$$ = $3; $$->add($1);}
+
+variable: IDENTIFIER ASSIGN assignment_expression {$$ = new ast::Variable($1, $3);}
+    | IDENTIFIER {$$ = new ast::Variable($1);}
+
+expression_opt: {$$ = nullptr;}
+    | expression {$$ = $1;}
+
+expression: assignment_expression  {$$ = $1;}
+    | assignment_expression COMMA expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+assignment_expression: conditional_expression {$$ = $1;}
+    | conditional_expression EQUALS assignment_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+conditional_expression: or_expression  {$$ = $1;}
+    | or_expression QMARK assignment_expression COLON assignment_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+or_expression: and_expression  {$$ = $1;}
+    | and_expression LOGICAL_OR or_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+and_expression: bitwise_or_expression  {$$ = $1;}
+    | bitwise_or_expression LOGICAL_AND and_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+bitwise_or_expression: bitwise_xor_expression  {$$ = $1;}
+    | bitwise_xor_expression BITWISE_OR bitwise_or_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+bitwise_xor_expression: bitwise_and_expression  {$$ = $1;}
+    | bitwise_and_expression BITWISE_XOR bitwise_xor_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+bitwise_and_expression: equality_expression  {$$ = $1;}
+    | equality_expression BITWISE_AND bitwise_and_expression   {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+equality_expression: relational_expression  {$$ = $1;}
+    | relational_expression EQUALS equality_expression  {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+    | relational_expression STRICT_EQUALS equality_expression  {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+relational_expression: shift_expression  {$$ = $1;}
+    | relational_expression LT shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_LT);}
+    | relational_expression LTE shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_LTE);}
+    | relational_expression GT shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_GT);}
+    | relational_expression GTE shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_GTE);}
+
+shift_expression: additive_expression  {$$ = $1;}
+    | additive_expression SLEFT shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_SLEFT);}
+    | additive_expression SRIGHT shift_expression  {$$ = new ast::BinaryExpression($1, $3, E_SRIGHT);}
+
+additive_expression: multiplicative_expression {$$ = $1;}
+    | multiplicative_expression PLUS additive_expression {$$ = new ast::BinaryExpression($1, $3, E_ADD);}
+    | multiplicative_expression MINUS additive_expression {$$ = new ast::BinaryExpression($1, $3, E_SUB);}
+
+multiplicative_expression: unary_expression {$$ = $1;}
+    | unary_expression MUL multiplicative_expression {$$ = new ast::BinaryExpression($1, $3, E_MUL);}
+    | unary_expression DIV multiplicative_expression {$$ = new ast::BinaryExpression($1, $3, E_DIV);}
+
+unary_expression: member_expression {$$ = $1; }
+    | PLUS unary_expression {$$ = new ast::UnaryExpression($2, U_PLUS); }
+    | MINUS unary_expression {$$ = new ast::UnaryExpression($2, U_SUB); }
+    | INC member_expression {$$ = new ast::UnaryExpression($2, U_INC); }
+    | DEC member_expression {$$ = new ast::UnaryExpression($2, U_DEC); }
+    | member_expression INC {$$ = new ast::UnaryExpression($1, U_POST_INC); }
+    | member_expression DEC {$$ = new ast::UnaryExpression($1, U_POST_DEC); }
+    | NEW constructor {$$ = new ast::UnaryExpression($2, U_NEW); }
+    | DELETE member_expression {$$ = new ast::UnaryExpression($2, U_DEL); }
+
+constructor: THIS DOT constructor_call {$$ = new ast::LiteralExpression();}
+    | constructor_call {$$ = new ast::LiteralExpression();}
+
+constructor_call: IDENTIFIER
+    | IDENTIFIER LPAREN argument_list_opt RPAREN
+    | IDENTIFIER DOT constructor_call
+
+member_expression: primary_expression
+    | primary_expression DOT member_expression
+    | primary_expression LBRACKET expression RBRACKET
+    | primary_expression LPAREN argument_list_opt RPAREN
+
+argument_list_opt: ;
+    | argument_list
+
+argument_list: assignment_expression
+    | assignment_expression COMMA argument_list
+
+primary_expression: LPAREN expression RPAREN {$$ = $2; }
+    | IDENTIFIER {$$ = new ast::LiteralExpression();};
+    | INT_LITERAL {$$ = new ast::LiteralExpression();};
+    | FLOAT_LITERAL {$$ = new ast::LiteralExpression();};
+    | STR_LITERAL {$$ = new ast::LiteralExpression();};
+    | FALSE {$$ = new ast::BooleanLiteralExpression(false);};
+    | TRUE {$$ = new ast::BooleanLiteralExpression(true);};
+    | _NULL {$$ = new ast::LiteralExpression();};
+    | THIS {$$ = new ast::LiteralExpression();};
+
+%%
+
+int yyerror(string s)
+{
+  extern int yylineno;	// defined and maintained in lex.c
+  extern char *yytext;	// defined and maintained in lex.c
+
+  cerr << "ERROR: " << s << " at symbol \"" << yytext;
+  cerr << "\" on line " << yylineno << endl;
+  exit(1);
+}
+
+int yyerror(char *s)
+{
+  return yyerror(string(s));
+}
+

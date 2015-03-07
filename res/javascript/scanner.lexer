@@ -1,0 +1,83 @@
+/* Mini Calculator */
+/* calc.lex */
+
+%option noyywrap
+
+%{\
+int yyerror(char *s);
+int yylineno = 1;
+#include "js.h"
+#include "jsast.h"
+#include "parser.h"
+
+using namespace ast;
+%}
+
+id          [a-zA-Z_][a-zA-Z0-9_]*
+digit		[0-9]
+int_const	{digit}+
+float_const	{digit}+\.{digit}+
+str_const_double = \" ( [^\"] )* \"
+str_const_single = \" ( [^\"] )* \"
+
+%%
+
+{int_const}	{ yylval.int_val = atoi(yytext); return INT_LITERAL; }
+{float_const}	{ yylval.float_val = atoi(yytext); return FLOAT_LITERAL; }
+"{"     { return LBRACE; }
+"}"     { return RBRACE; }
+"," { return COMMA; }
+";" { cout << "Encountered ;"; return SEMI; }
+"(" { return LPAREN; }
+")" { return RPAREN; }
+"=" { return ASSIGN; }
+"?" { return QMARK; }
+":" { return COLON; }
+"||" { return LOGICAL_OR; }
+"&&" { return LOGICAL_AND; }
+"|" { return BITWISE_OR; }
+"^" { return BITWISE_XOR; }
+"&" { return BITWISE_AND; }
+"." { return DOT; }
+"]" { return LBRACKET; }
+"[" { return RBRACKET; }
+"*" { return MUL; }
+"/" { return DIV; }
+"+" { return PLUS; }
+"-" { return MINUS; }
+"<" { return LT; }
+"<=" { return LTE; }
+">" { return GT; }
+">=" { return GTE; }
+"==" { return EQUALS; }
+"===" { return STRICT_EQUALS; }
+"<<" { return SLEFT; }
+">>" { return SRIGHT; }
+"++" { return INC; }
+"--" { return DEC; }
+
+"function"  { return FUNCTION; }
+"if"        { return IF; }
+"else"      { return ELSE; }
+"while"     { return WHILE; }
+"for"       { return FOR; }
+"break"     { return BREAK; }
+"continue"  { return CONTINUE; }
+"with"      { return WITH; }
+"var"       { return VAR; }
+"new"       { return NEW; }
+"delete"    { return DELETE; }
+"this"      { return THIS; }
+"true"      { return TRUE; }
+"false"     { return FALSE; }
+"null"      { return _NULL; }
+"in"        { return IN; }
+"return"    { return RETURN; }
+
+{id} { return IDENTIFIER; }
+
+
+[ \t]*		{}
+[\n]		{ yylineno++;	}
+
+.		{ std::cerr << "SCANNER "; yyerror(""); exit(1);	}
